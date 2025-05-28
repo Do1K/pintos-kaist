@@ -28,6 +28,8 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+static struct list sleep_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -110,6 +112,8 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&destruction_req);
 
+	list_init(&sleep_list);
+
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
@@ -125,7 +129,6 @@ thread_start (void) {
 	struct semaphore idle_started;
 	sema_init (&idle_started, 0);
 	thread_create ("idle", PRI_MIN, idle, &idle_started);
-
 	/* Start preemptive thread scheduling. */
 	intr_enable ();
 
@@ -138,6 +141,8 @@ thread_start (void) {
 void
 thread_tick (void) {
 	struct thread *t = thread_current ();
+	//printf("test: %s \n", t->name);
+	thread_wake(timer_ticks());
 
 	/* Update statistics. */
 	if (t == idle_thread)
@@ -152,6 +157,23 @@ thread_tick (void) {
 	/* Enforce preemption. */
 	if (++thread_ticks >= TIME_SLICE)
 		intr_yield_on_return ();
+}
+
+// wake up thread into sleep_list
+void
+thread_wake(int64_t current_ticks){
+	struct list_elem *e = list_begin(&sleep_list);
+
+	while (e != list_end(&sleep_list)) {
+        struct thread *t = list_entry(e, struct thread, elem);
+
+        if(t->wake_up_tick>current_ticks){
+			e=list_next(e);
+			continue;
+		}
+		e=list_remove(e);
+		thread_unblock(t);
+    }
 }
 
 /* Prints thread statistics. */
@@ -209,6 +231,7 @@ thread_create (const char *name, int priority,
 
 	return tid;
 }
+
 
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
@@ -307,6 +330,26 @@ thread_yield (void) {
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
+
+void
+thread_sleep (void) {
+	struct thread *curr = thread_current ();
+	enum intr_level old_level;
+
+	ASSERT (!intr_context ());
+
+	old_level = intr_disable ();
+	if (curr != idle_thread){
+		list_push_back (&sleep_list, &curr->elem);
+		do_schedule (THREAD_BLOCKED);
+	}else{
+		do_schedule (THREAD_READY);
+	}
+		
+		
+	intr_set_level (old_level);
+}
+
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void

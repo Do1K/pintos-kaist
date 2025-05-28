@@ -82,6 +82,7 @@ main (void) {
 	thread_init ();
 	console_init ();
 
+	
 	/* Initialize memory system. */
 	mem_end = palloc_init ();
 	malloc_init ();
