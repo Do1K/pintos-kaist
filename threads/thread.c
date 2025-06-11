@@ -228,6 +228,7 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
+	thread_preemption();
 
 	return tid;
 }
@@ -358,6 +359,7 @@ thread_sleep (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	thread_preemption();
 }
 
 /* Returns the current thread's priority. */
@@ -639,4 +641,11 @@ allocate_tid (void) {
 bool thread_compare_priority(struct list_elem *ori, struct list_elem *cmp, void *aux UNUSED){
 
 	return list_entry(ori, struct thread, elem)->priority>list_entry(cmp, struct thread, elem)->priority;
+}
+
+void 
+thread_preemption(){
+	if(!list_empty(&ready_list) && thread_current()->priority < list_entry(list_front(&ready_list), struct thread, elem)->priority){
+		thread_yield();
+	}
 }
