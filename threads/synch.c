@@ -32,6 +32,11 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+void remove_with_lock(struct lock *lock);
+void refresh_priority();
+void nested_donation();
+void donate_priority();
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -193,10 +198,28 @@ lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
+	struct thread *cur=thread_current();
+	if(lock->holder!=NULL){
+		cur->wait_on_lock=lock;
+		//printf(cur->wait_on_lock==NULL? "lock acquire에서 null임\n": "lock acquire 에서 null아님\n");
+		struct thread *lock_acquired_thread=lock->holder;
 
+		//list_insert_ordered(&lock_acquired_thread->donations, &thread_current()->donation_elem, thread_compare_donate_priority, NULL);
+		list_push_back(&lock->holder->donations, &cur->donation_elem);
+		//printf("현재 스레드 : %s 우선순위: %d\n", thread_current()->name, thread_current()->priority);
+		nested_donation();
+		//donate_priority();
+	}
+	
 	sema_down (&lock->semaphore);
-	lock->holder = thread_current ();
+
+	cur->wait_on_lock=NULL;
+	
+	lock->holder = cur;
+	
 }
+
+
 
 /* Tries to acquires LOCK and returns true if successful or false
    on failure.  The lock must not already be held by the current
@@ -228,8 +251,14 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	lock->holder = NULL;
+	
+	remove_with_lock(lock);
+
+	refresh_priority();
+
 	sema_up (&lock->semaphore);
+
+	lock->holder = NULL;
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -345,6 +374,89 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 
 	while (!list_empty (&cond->waiters))
 		cond_signal (cond, lock);
+}
+
+void remove_with_lock(struct lock *lock) {
+    struct list_elem *e = list_begin(&thread_current()->donations);
+    while (e != list_end(&thread_current()->donations)) {
+        struct thread *t = list_entry(e, struct thread, donation_elem);
+        struct list_elem *next = list_next(e); // 미리 저장
+
+        if (t->wait_on_lock == lock) {
+            list_remove(&t->donation_elem);
+            t->wait_on_lock = NULL;
+        }
+
+        e = next;
+    }
+}
+
+
+void
+refresh_priority(){
+
+	struct thread *cur=thread_current();
+	cur->priority=cur->init_priority;
+	if(!list_empty(&cur->donations)){
+		list_sort(&cur->donations, thread_compare_donate_priority, NULL);
+		struct thread *front=list_entry(list_front(&cur->donations),struct thread, donation_elem);
+		if(front->priority>cur->priority){
+			cur->priority=front->priority;
+		}
+	}
+}
+
+// void
+// nested_donation(){
+
+// 	struct thread *cur=thread_current();
+
+// 	for(int depth=0; depth<8 ;depth++){
+// 		if(cur->wait_on_lock==NULL)break;
+// 		struct thread *holder=cur->wait_on_lock->holder;
+// 		if(holder->priority<cur->priority)
+// 		holder->priority=cur->priority;
+// 		cur=holder;
+// 	}
+// }
+
+void
+nested_donation() {
+    struct thread *cur = thread_current();
+	//printf("여기까진 오니?\n");
+	
+    for (int depth = 0; depth < 8; depth++) {
+		
+
+        if (!cur->wait_on_lock) break;
+
+        struct thread *holder = cur->wait_on_lock->holder;
+		
+        //if (holder == NULL) break;
+		//printf("순환중- 현재스레드: %s holder: %s 현재스레드 우선순위: %d \n", cur->name, holder->name, cur->priority);
+
+        
+        holder->priority = cur->priority;
+
+        cur = holder;
+    }
+}
+
+void 
+donate_priority() 
+{
+    struct thread *t = thread_current();
+    int priority = t->priority;
+
+    for (int depth = 0; depth < 8; depth++) 
+	{
+		
+        if (t->wait_on_lock == NULL)
+            break;
+
+        t = t->wait_on_lock->holder;
+        t->priority = priority;
+    }
 }
 
 

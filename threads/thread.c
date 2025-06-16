@@ -65,6 +65,9 @@ static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
 
+bool thread_compare_priority(struct list_elem *, struct list_elem *, void *aux UNUSED);
+void thread_preemption();
+
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
 
@@ -359,6 +362,9 @@ thread_sleep (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	thread_current()->init_priority=new_priority;
+
+	refresh_priority();
 	thread_preemption();
 }
 
@@ -457,6 +463,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	t->init_priority=priority;
+	t->wait_on_lock=NULL;
+	list_init(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -469,7 +479,10 @@ next_thread_to_run (void) {
 	if (list_empty (&ready_list))
 		return idle_thread;
 	else
-		return list_entry (list_pop_front (&ready_list), struct thread, elem);
+		{
+			list_sort(&ready_list, thread_compare_priority,NULL);
+			return list_entry (list_pop_front (&ready_list), struct thread, elem);
+		}
 }
 
 /* Use iretq to launch the thread */
@@ -641,6 +654,11 @@ allocate_tid (void) {
 bool thread_compare_priority(struct list_elem *ori, struct list_elem *cmp, void *aux UNUSED){
 
 	return list_entry(ori, struct thread, elem)->priority>list_entry(cmp, struct thread, elem)->priority;
+}
+
+bool thread_compare_donate_priority(struct list_elem *ori, struct list_elem *cmp, void *aux UNUSED){
+
+	return list_entry(ori, struct thread, donation_elem)->priority>list_entry(cmp, struct thread, donation_elem)->priority;
 }
 
 void 

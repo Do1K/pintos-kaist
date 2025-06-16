@@ -94,7 +94,7 @@ struct thread {
 	int64_t wake_up_tick;
 
 	int init_priority;
-	struct lock wait_on_lock;
+	struct lock *wait_on_lock;
 	struct list donations;
 	struct list_elem donation_elem;
 
@@ -150,6 +150,10 @@ int thread_get_load_avg (void);
 void do_iret (struct intr_frame *tf);
 
 bool thread_compare_priority(struct list_elem *a,
+                             struct list_elem *b,
+                             void *aux);
+
+bool thread_compare_donate_priority(struct list_elem *a,
                              struct list_elem *b,
                              void *aux);
 
