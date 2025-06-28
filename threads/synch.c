@@ -199,6 +199,12 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 	struct thread *cur=thread_current();
+
+	if(thread_mlfqs){
+		sema_down (&lock->semaphore);
+		lock->holder = cur;
+		return;
+	}
 	if(lock->holder!=NULL){
 		cur->wait_on_lock=lock;
 		//printf(cur->wait_on_lock==NULL? "lock acquire에서 null임\n": "lock acquire 에서 null아님\n");
@@ -251,6 +257,12 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
+	lock->holder = NULL;
+
+	if(thread_mlfqs){
+		sema_up (&lock->semaphore);
+		return;
+	}
 	
 	remove_with_lock(lock);
 
@@ -258,7 +270,7 @@ lock_release (struct lock *lock) {
 
 	sema_up (&lock->semaphore);
 
-	lock->holder = NULL;
+	
 }
 
 /* Returns true if the current thread holds LOCK, false

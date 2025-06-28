@@ -28,6 +28,12 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+            
+#define NICE_DEFAULT 0
+#define RECENT_CPU_DEFAULT 0
+#define LOAD_AVG_DEFAULT 0
+
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -101,6 +107,10 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
+	int nice;
+	int recent_cpu;
+	struct list_elem all_elem;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -149,6 +159,9 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
+void thread_awake (int64_t ticks);
+
+
 bool thread_compare_priority(struct list_elem *a,
                              struct list_elem *b,
                              void *aux);
@@ -158,4 +171,5 @@ bool thread_compare_donate_priority(struct list_elem *a,
                              void *aux);
 
 
-#endif /* threads/thread.h */
+#endif 
+/* threads/thread.h */
